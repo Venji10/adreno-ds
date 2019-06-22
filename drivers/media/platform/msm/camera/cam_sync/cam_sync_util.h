@@ -14,9 +14,9 @@
 #define __CAM_SYNC_UTIL_H__
 
 
-#include <cam_sync_api.h>
+#include "cam_sync_api.h"
 #include "cam_sync_private.h"
-#include "cam_debug_util.h"
+#include "../cam_utils/cam_debug_util.h"
 
 extern struct sync_device *sync_dev;
 
