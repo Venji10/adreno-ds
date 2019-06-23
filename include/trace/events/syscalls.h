@@ -69,5 +69,5 @@ TRACE_EVENT_FLAGS(sys_exit, TRACE_EVENT_FL_CAP_ANY)
 #endif /* _TRACE_EVENTS_SYSCALLS_H */
 
 /* This part must be outside protection */
-#include <trace/define_trace.h>
-
+#include "../../../drivers/media/platform/msm/camera/cam_utils/cam_trace.h"
+	
