@@ -16,7 +16,7 @@
  */
 
 #include <linux/compat.h>
-#include <linux/fb.h>
+//#include <linux/fb.h>
 
 #include <linux/uaccess.h>
 
