@@ -101,7 +101,7 @@ static void msm_hdmi_config_avi_infoframe(struct hdmi *hdmi)
 	u32 val;
 	int len;
 
-	drm_hdmi_avi_infoframe_from_display_mode(&frame.avi, mode, false);
+	drm_hdmi_avi_infoframe_from_display_mode(&frame.avi, mode, /* false */ );
 
 	len = hdmi_infoframe_pack(&frame, buffer, sizeof(buffer));
 	if (len < 0) {
@@ -295,7 +295,7 @@ struct drm_bridge *msm_hdmi_bridge_init(struct hdmi *hdmi)
 	bridge = &hdmi_bridge->base;
 	bridge->funcs = &msm_hdmi_bridge_funcs;
 
-	ret = drm_bridge_attach(hdmi->encoder, bridge, NULL);
+	ret = drm_bridge_attach(hdmi->encoder, bridge);
 	if (ret)
 		goto fail;
 

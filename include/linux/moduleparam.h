@@ -163,6 +163,12 @@ struct kparam_array
  *
  * The ops can have NULL set or get functions.
  */
+#define module_param_cb(name, ops, arg, perm)				      \
+	__module_param_call(MODULE_PARAM_PREFIX, name, ops, arg, perm, -1, 0)
+
+#define module_param_cb_unsafe(name, ops, arg, perm)			      \
+	__module_param_call(MODULE_PARAM_PREFIX, name, ops, arg, perm, -1,    \
+			    KERNEL_PARAM_FL_UNSAFE)
 
 /**
  * <level>_param_cb - general callback for a module/cmdline parameter

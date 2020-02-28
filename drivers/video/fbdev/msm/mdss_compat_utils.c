@@ -16,11 +16,11 @@
  */
 
 #include <linux/compat.h>
-//#include <linux/fb.h>
+#include <linux/fb.h>
 
 #include <linux/uaccess.h>
 
-#include "mdss_fb.c"
+#include "mdss_fb.h"
 #include "mdss_compat_utils.h"
 #include "mdss_mdp_hwio.h"
 #include "mdss_mdp.h"

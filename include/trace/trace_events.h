@@ -137,7 +137,7 @@ TRACE_MAKE_SYSTEM_STR();
 #define TRACE_EVENT_PERF_PERM(name, expr...)				\
 	__TRACE_EVENT_PERF_PERM(name, expr)
 
-#include "../../drivers/media/platform/msm/camera/cam_utils/cam_trace.h"
+#include TRACE_INCLUDE(TRACE_INCLUDE_FILE)
 
 /*
  * Stage 2 of the trace events.
