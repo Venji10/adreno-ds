@@ -959,8 +959,8 @@ void drm_atomic_helper_commit_modeset_enables(struct drm_device *dev,
 			DRM_DEBUG_ATOMIC("enabling [CRTC:%d:%s]\n",
 					 crtc->base.id, crtc->name);
 
-			if (funcs->enable)
-				funcs->enable(crtc);
+			if (funcs->atomic_enable)
+				funcs->atomic_enable(crtc);
 			else
 				funcs->commit(crtc);
 		}
