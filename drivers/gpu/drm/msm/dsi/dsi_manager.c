@@ -653,7 +653,7 @@ struct drm_bridge *msm_dsi_manager_bridge_init(u8 id)
 	bridge = &dsi_bridge->base;
 	bridge->funcs = &dsi_mgr_bridge_funcs;
 
-	ret = drm_bridge_attach(encoder, bridge, NULL);
+	ret = drm_bridge_attach(encoder, bridge);
 	if (ret)
 		goto fail;
 
@@ -685,7 +685,8 @@ struct drm_connector *msm_dsi_manager_ext_bridge_init(u8 id)
 	encoder = msm_dsi->encoder;
 
 	/* link the internal dsi bridge to the external bridge */
-	drm_bridge_attach(encoder, ext_bridge, int_bridge);
+//	drm_bridge_attach(encoder, ext_bridge, int_bridge); 
+//TODO
 
 	/*
 	 * we need the drm_connector created by the external bridge
