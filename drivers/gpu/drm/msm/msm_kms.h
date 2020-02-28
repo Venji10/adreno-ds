@@ -26,21 +26,6 @@
 
 #define MAX_PLANE	4
 
-/**
- * Device Private DRM Mode Flags
- * drm_mode->private_flags
- */
-/* Connector has interpreted seamless transition request as dynamic fps */
-#define MSM_MODE_FLAG_SEAMLESS_DYNAMIC_FPS	(1<<0)
-/* Transition to new mode requires a wait-for-vblank before the modeset */
-#define MSM_MODE_FLAG_VBLANK_PRE_MODESET	(1<<1)
-/* Request to switch the connector mode */
-#define MSM_MODE_FLAG_SEAMLESS_DMS			(1<<2)
-/* Request to switch the fps */
-#define MSM_MODE_FLAG_SEAMLESS_VRR			(1<<3)
-/* Request to switch the bit clk */
-#define MSM_MODE_FLAG_SEAMLESS_DYN_CLK			(1<<4)
-
 /* As there are different display controller blocks depending on the
  * snapdragon version, the kms support is split out and the appropriate
  * implementation is loaded at runtime.  The kms module is responsible
@@ -74,8 +59,7 @@ struct msm_kms_funcs {
 	/* get msm_format w/ optional format modifiers from drm_mode_fb_cmd2 */
 	const struct msm_format *(*get_format)(struct msm_kms *kms,
 					const uint32_t format,
-					const uint64_t *modifiers,
-					const uint32_t modifiers_len);
+					const uint64_t modifiers);
 	/* do format checking on format modified through fb_cmd2 modifiers */
 	int (*check_modified_format)(const struct msm_kms *kms,
 			const struct msm_format *msm_fmt,
@@ -95,8 +79,9 @@ struct msm_kms_funcs {
 	void (*preclose)(struct msm_kms *kms, struct drm_file *file);
 	void (*postclose)(struct msm_kms *kms, struct drm_file *file);
 	void (*lastclose)(struct msm_kms *kms);
-	int (*register_events)(struct msm_kms *kms,
-			struct drm_mode_object *obj, u32 event, bool en);
+	void (*set_encoder_mode)(struct msm_kms *kms,
+				 struct drm_encoder *encoder,
+				 bool cmd_mode);
 	/* pm suspend/resume hooks */
 	int (*pm_suspend)(struct device *dev);
 	int (*pm_resume)(struct device *dev);
@@ -106,10 +91,10 @@ struct msm_kms_funcs {
 	struct msm_gem_address_space *(*get_address_space)(
 			struct msm_kms *kms,
 			unsigned int domain);
-	/* handle continuous splash  */
-	int (*cont_splash_config)(struct msm_kms *kms);
-	/* check for continuous splash status */
-	bool (*check_for_splash)(struct msm_kms *kms);
+#ifdef CONFIG_DEBUG_FS
+	/* debugfs: */
+	int (*debugfs_init)(struct msm_kms *kms, struct drm_minor *minor);
+#endif
 };
 
 struct msm_kms {
@@ -117,6 +102,9 @@ struct msm_kms {
 
 	/* irq number to be passed on to drm_irq_install */
 	int irq;
+
+	/* mapper-id used to request GEM buffer mapped for scanout: */
+	struct msm_gem_address_space *aspace;
 };
 
 static inline void msm_kms_init(struct msm_kms *kms,
@@ -125,69 +113,22 @@ static inline void msm_kms_init(struct msm_kms *kms,
 	kms->funcs = funcs;
 }
 
-#ifdef CONFIG_DRM_MSM_MDP4
 struct msm_kms *mdp4_kms_init(struct drm_device *dev);
-#else
-static inline
-struct msm_kms *mdp4_kms_init(struct drm_device *dev) { return NULL; };
-#endif
-
-#ifdef CONFIG_DRM_MSM_MDP5
-int msm_mdss_init(struct drm_device *dev);
-void msm_mdss_destroy(struct drm_device *dev);
 struct msm_kms *mdp5_kms_init(struct drm_device *dev);
-#else
-static inline int msm_mdss_init(struct drm_device *dev)
-{
-	return 0;
-}
-static inline void msm_mdss_destroy(struct drm_device *dev)
-{
-}
-static inline struct msm_kms *mdp5_kms_init(struct drm_device *dev)
-{
-	return NULL;
-}
-#endif
-struct msm_kms *sde_kms_init(struct drm_device *dev);
+struct msm_kms *dpu_kms_init(struct drm_device *dev);
 
-/**
- * Mode Set Utility Functions
- */
-static inline bool msm_is_mode_seamless(const struct drm_display_mode *mode)
-{
-	return (mode->flags & DRM_MODE_FLAG_SEAMLESS);
-}
+struct msm_mdss_funcs {
+	int (*enable)(struct msm_mdss *mdss);
+	int (*disable)(struct msm_mdss *mdss);
+	void (*destroy)(struct drm_device *dev);
+};
 
-static inline bool msm_is_mode_seamless_dms(const struct drm_display_mode *mode)
-{
-	return mode ? (mode->private_flags & MSM_MODE_FLAG_SEAMLESS_DMS)
-		: false;
-}
+struct msm_mdss {
+	struct drm_device *dev;
+	const struct msm_mdss_funcs *funcs;
+};
 
-static inline bool msm_is_mode_dynamic_fps(const struct drm_display_mode *mode)
-{
-	return ((mode->flags & DRM_MODE_FLAG_SEAMLESS) &&
-		(mode->private_flags & MSM_MODE_FLAG_SEAMLESS_DYNAMIC_FPS));
-}
-
-static inline bool msm_is_mode_seamless_vrr(const struct drm_display_mode *mode)
-{
-	return mode ? (mode->private_flags & MSM_MODE_FLAG_SEAMLESS_VRR)
-		: false;
-}
-
-static inline bool msm_is_mode_seamless_dyn_clk(
-					const struct drm_display_mode *mode)
-{
-	return mode ? (mode->private_flags & MSM_MODE_FLAG_SEAMLESS_DYN_CLK)
-		: false;
-}
-
-static inline bool msm_needs_vblank_pre_modeset(
-		const struct drm_display_mode *mode)
-{
-	return (mode->private_flags & MSM_MODE_FLAG_VBLANK_PRE_MODESET);
-}
+int mdp5_mdss_init(struct drm_device *dev);
+int dpu_mdss_init(struct drm_device *dev);
 
 #endif /* __MSM_KMS_H__ */

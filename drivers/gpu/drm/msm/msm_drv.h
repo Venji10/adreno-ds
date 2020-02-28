@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
- * Copyright (C) 2018 XiaoMi, Inc.
+ * Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
  * Copyright (C) 2013 Red Hat
  * Author: Rob Clark <robdclark@gmail.com>
  *
@@ -34,7 +33,6 @@
 #include <linux/types.h>
 #include <linux/of_graph.h>
 #include <linux/of_device.h>
-#include <linux/sde_io_util.h>
 #include <asm/sizes.h>
 #include <linux/kthread.h>
 
@@ -46,8 +44,6 @@
 #include <drm/drm_fb_helper.h>
 #include <drm/msm_drm.h>
 #include <drm/drm_gem.h>
-
-#include "sde_power_handle.h"
 
 #define GET_MAJOR_REV(rev)		((rev) >> 28)
 #define GET_MINOR_REV(rev)		(((rev) >> 16) & 0xFFF)
@@ -61,7 +57,6 @@ struct msm_rd_state;
 struct msm_perf_state;
 struct msm_gem_submit;
 struct msm_fence_context;
-struct msm_fence_cb;
 struct msm_gem_address_space;
 struct msm_gem_vma;
 
@@ -72,137 +67,27 @@ struct msm_gem_vma;
 #define MAX_BRIDGES    8
 #define MAX_CONNECTORS 8
 
-#define TEARDOWN_DEADLOCK_RETRY_MAX 5
-
-extern atomic_t resume_pending;
-extern wait_queue_head_t resume_wait_q;
-
 struct msm_file_private {
-	/* currently we don't do anything useful with this.. but when
-	 * per-context address spaces are supported we'd keep track of
-	 * the context's page-tables here.
-	 */
-	int dummy;
+	rwlock_t queuelock;
+	struct list_head submitqueues;
+	int queueid;
 };
 
 enum msm_mdp_plane_property {
-	/* blob properties, always put these first */
-	PLANE_PROP_CSC_V1,
-	PLANE_PROP_INFO,
-	PLANE_PROP_SCALER_LUT_ED,
-	PLANE_PROP_SCALER_LUT_CIR,
-	PLANE_PROP_SCALER_LUT_SEP,
-	PLANE_PROP_SKIN_COLOR,
-	PLANE_PROP_SKY_COLOR,
-	PLANE_PROP_FOLIAGE_COLOR,
-	PLANE_PROP_ROT_CAPS_V1,
-
-	/* # of blob properties */
-	PLANE_PROP_BLOBCOUNT,
-
 	/* range properties */
-	PLANE_PROP_ZPOS = PLANE_PROP_BLOBCOUNT,
-	PLANE_PROP_ALPHA,
-	PLANE_PROP_COLOR_FILL,
-	PLANE_PROP_H_DECIMATE,
-	PLANE_PROP_V_DECIMATE,
-	PLANE_PROP_INPUT_FENCE,
-	PLANE_PROP_HUE_ADJUST,
-	PLANE_PROP_SATURATION_ADJUST,
-	PLANE_PROP_VALUE_ADJUST,
-	PLANE_PROP_CONTRAST_ADJUST,
-	PLANE_PROP_EXCL_RECT_V1,
-	PLANE_PROP_ROT_DST_X,
-	PLANE_PROP_ROT_DST_Y,
-	PLANE_PROP_ROT_DST_W,
-	PLANE_PROP_ROT_DST_H,
-	PLANE_PROP_PREFILL_SIZE,
-	PLANE_PROP_PREFILL_TIME,
-	PLANE_PROP_SCALER_V1,
-	PLANE_PROP_SCALER_V2,
-
-	/* enum/bitmask properties */
-	PLANE_PROP_ROTATION,
-	PLANE_PROP_BLEND_OP,
-	PLANE_PROP_SRC_CONFIG,
-	PLANE_PROP_FB_TRANSLATION_MODE,
-	PLANE_PROP_MULTIRECT_MODE,
-	PLANE_PROP_LAYOUT,
+	PLANE_PROP_ZPOS,
 
 	/* total # of properties */
 	PLANE_PROP_COUNT
 };
 
-enum msm_mdp_crtc_property {
-	CRTC_PROP_INFO,
-	CRTC_PROP_DEST_SCALER_LUT_ED,
-	CRTC_PROP_DEST_SCALER_LUT_CIR,
-	CRTC_PROP_DEST_SCALER_LUT_SEP,
-
-	/* # of blob properties */
-	CRTC_PROP_BLOBCOUNT,
-
-	/* range properties */
-	CRTC_PROP_INPUT_FENCE_TIMEOUT = CRTC_PROP_BLOBCOUNT,
-	CRTC_PROP_OUTPUT_FENCE,
-	CRTC_PROP_OUTPUT_FENCE_OFFSET,
-	CRTC_PROP_DIM_LAYER_V1,
-	CRTC_PROP_CORE_CLK,
-	CRTC_PROP_CORE_AB,
-	CRTC_PROP_CORE_IB,
-	CRTC_PROP_LLCC_AB,
-	CRTC_PROP_LLCC_IB,
-	CRTC_PROP_DRAM_AB,
-	CRTC_PROP_DRAM_IB,
-	CRTC_PROP_ROT_PREFILL_BW,
-	CRTC_PROP_ROT_CLK,
-	CRTC_PROP_ROI_V1,
-	CRTC_PROP_SECURITY_LEVEL,
-	CRTC_PROP_IDLE_TIMEOUT,
-	CRTC_PROP_DEST_SCALER,
-	CRTC_PROP_CAPTURE_OUTPUT,
-
-	CRTC_PROP_ENABLE_SUI_ENHANCEMENT,
-	CRTC_PROP_IDLE_PC_STATE,
-
-	/* total # of properties */
-	CRTC_PROP_COUNT
+struct msm_vblank_ctrl {
+	struct kthread_work work;
+	struct list_head event_list;
+	spinlock_t lock;
 };
 
-enum msm_mdp_conn_property {
-	/* blob properties, always put these first */
-	CONNECTOR_PROP_SDE_INFO,
-	CONNECTOR_PROP_MODE_INFO,
-	CONNECTOR_PROP_HDR_INFO,
-	CONNECTOR_PROP_EXT_HDR_INFO,
-	CONNECTOR_PROP_PP_DITHER,
-	CONNECTOR_PROP_HDR_METADATA,
-
-	/* # of blob properties */
-	CONNECTOR_PROP_BLOBCOUNT,
-
-	/* range properties */
-	CONNECTOR_PROP_OUT_FB = CONNECTOR_PROP_BLOBCOUNT,
-	CONNECTOR_PROP_RETIRE_FENCE,
-	CONNECTOR_PROP_DST_X,
-	CONNECTOR_PROP_DST_Y,
-	CONNECTOR_PROP_DST_W,
-	CONNECTOR_PROP_DST_H,
-	CONNECTOR_PROP_ROI_V1,
-	CONNECTOR_PROP_BL_SCALE,
-	CONNECTOR_PROP_AD_BL_SCALE,
-
-	/* enum/bitmask properties */
-	CONNECTOR_PROP_TOPOLOGY_NAME,
-	CONNECTOR_PROP_TOPOLOGY_CONTROL,
-	CONNECTOR_PROP_AUTOREFRESH,
-	CONNECTOR_PROP_LP,
-	CONNECTOR_PROP_FB_TRANSLATION_MODE,
-
-	/* total # of properties */
-	CONNECTOR_PROP_COUNT
-};
-
+#define MSM_GPU_MAX_RINGS 4
 #define MAX_H_TILES_PER_DISPLAY 2
 
 /**
@@ -221,14 +106,12 @@ enum msm_display_compression_type {
  * @MSM_DISPLAY_CAP_CMD_MODE:           Command mode supported
  * @MSM_DISPLAY_CAP_HOT_PLUG:           Hot plug detection supported
  * @MSM_DISPLAY_CAP_EDID:               EDID supported
- * @MSM_DISPLAY_ESD_ENABLED:            ESD feature enabled
  */
 enum msm_display_caps {
 	MSM_DISPLAY_CAP_VID_MODE	= BIT(0),
 	MSM_DISPLAY_CAP_CMD_MODE	= BIT(1),
 	MSM_DISPLAY_CAP_HOT_PLUG	= BIT(2),
 	MSM_DISPLAY_CAP_EDID		= BIT(3),
-	MSM_DISPLAY_ESD_ENABLED		= BIT(4),
 };
 
 /**
@@ -236,45 +119,11 @@ enum msm_display_caps {
  * @MSM_ENC_COMMIT_DONE - wait for the driver to flush the registers to HW
  * @MSM_ENC_TX_COMPLETE - wait for the HW to transfer the frame to panel
  * @MSM_ENC_VBLANK - wait for the HW VBLANK event (for driver-internal waiters)
- * @MSM_ENC_ACTIVE_REGION - wait for the TG to be in active pixel region
  */
 enum msm_event_wait {
 	MSM_ENC_COMMIT_DONE = 0,
 	MSM_ENC_TX_COMPLETE,
 	MSM_ENC_VBLANK,
-	MSM_ENC_ACTIVE_REGION,
-};
-
-/**
- * struct msm_roi_alignment - region of interest alignment restrictions
- * @xstart_pix_align: left x offset alignment restriction
- * @width_pix_align: width alignment restriction
- * @ystart_pix_align: top y offset alignment restriction
- * @height_pix_align: height alignment restriction
- * @min_width: minimum width restriction
- * @min_height: minimum height restriction
- */
-struct msm_roi_alignment {
-	uint32_t xstart_pix_align;
-	uint32_t width_pix_align;
-	uint32_t ystart_pix_align;
-	uint32_t height_pix_align;
-	uint32_t min_width;
-	uint32_t min_height;
-};
-
-/**
- * struct msm_roi_caps - display's region of interest capabilities
- * @enabled: true if some region of interest is supported
- * @merge_rois: merge rois before sending to display
- * @num_roi: maximum number of rois supported
- * @align: roi alignment restrictions
- */
-struct msm_roi_caps {
-	bool enabled;
-	bool merge_rois;
-	uint32_t num_roi;
-	struct msm_roi_alignment align;
 };
 
 /**
@@ -383,20 +232,6 @@ struct msm_display_dsc_info {
 };
 
 /**
- * struct msm_compression_info - defined panel compression
- * @comp_type:        type of compression supported
- * @dsc_info:         dsc configuration if the compression
- *                    supported is DSC
- */
-struct msm_compression_info {
-	enum msm_display_compression_type comp_type;
-
-	union{
-		struct msm_display_dsc_info dsc_info;
-	};
-};
-
-/**
  * struct msm_display_topology - defines a display topology pipeline
  * @num_lm:       number of layer mixers used
  * @num_enc:      number of compression encoder blocks used
@@ -409,89 +244,21 @@ struct msm_display_topology {
 };
 
 /**
- * struct msm_mode_info - defines all msm custom mode info
- * @frame_rate:      frame_rate of the mode
- * @vtotal:          vtotal calculated for the mode
- * @prefill_lines:   prefill lines based on porches.
- * @jitter_numer:	display panel jitter numerator configuration
- * @jitter_denom:	display panel jitter denominator configuration
- * @clk_rate:	     DSI bit clock per lane in HZ.
- * @topology:        supported topology for the mode
- * @comp_info:       compression info supported
- * @roi_caps:        panel roi capabilities
- */
-struct msm_mode_info {
-	uint32_t frame_rate;
-	uint32_t vtotal;
-	uint32_t prefill_lines;
-	uint32_t jitter_numer;
-	uint32_t jitter_denom;
-	uint64_t clk_rate;
-	struct msm_display_topology topology;
-	struct msm_compression_info comp_info;
-	struct msm_roi_caps roi_caps;
-};
-
-/**
  * struct msm_display_info - defines display properties
  * @intf_type:          DRM_MODE_CONNECTOR_ display type
  * @capabilities:       Bitmask of display flags
  * @num_of_h_tiles:     Number of horizontal tiles in case of split interface
  * @h_tile_instance:    Controller instance used per tile. Number of elements is
  *                      based on num_of_h_tiles
- * @is_connected:       Set to true if display is connected
- * @width_mm:           Physical width
- * @height_mm:          Physical height
- * @max_width:          Max width of display. In case of hot pluggable display
- *                      this is max width supported by controller
- * @max_height:         Max height of display. In case of hot pluggable display
- *                      this is max height supported by controller
- * @clk_rate:           DSI bit clock per lane in HZ.
- * @is_primary:         Set to true if display is primary display
  * @is_te_using_watchdog_timer:  Boolean to indicate watchdog TE is
  *				 used instead of panel TE in cmd mode panels
- * @roi_caps:           Region of interest capability info
  */
 struct msm_display_info {
 	int intf_type;
 	uint32_t capabilities;
-
 	uint32_t num_of_h_tiles;
 	uint32_t h_tile_instance[MAX_H_TILES_PER_DISPLAY];
-
-	bool is_connected;
-
-	unsigned int width_mm;
-	unsigned int height_mm;
-
-	uint32_t max_width;
-	uint32_t max_height;
-	uint64_t clk_rate;
-
-	bool is_primary;
 	bool is_te_using_watchdog_timer;
-	struct msm_roi_caps roi_caps;
-};
-
-#define MSM_MAX_ROI	4
-
-/**
- * struct msm_roi_list - list of regions of interest for a drm object
- * @num_rects: number of valid rectangles in the roi array
- * @roi: list of roi rectangles
- */
-struct msm_roi_list {
-	uint32_t num_rects;
-	struct drm_clip_rect roi[MSM_MAX_ROI];
-};
-
-/**
- * struct - msm_display_kickoff_params - info for display features at kickoff
- * @rois: Regions of interest structure for mapping CRTC to Connector output
- */
-struct msm_display_kickoff_params {
-	struct msm_roi_list *rois;
-	struct drm_msm_ext_hdr_metadata *hdr_meta;
 };
 
 /**
@@ -523,13 +290,10 @@ struct msm_drm_private {
 
 	struct msm_kms *kms;
 
-	struct sde_power_handle phandle;
-	struct sde_power_client *pclient;
-
 	/* subordinate devices, if present: */
 	struct platform_device *gpu_pdev;
 
-	/* top level MDSS wrapper device (for MDP5 only) */
+	/* top level MDSS wrapper device (for MDP5/DPU only) */
 	struct msm_mdss *mdss;
 
 	/* possibly this should be in the kms component, but it is
@@ -552,25 +316,14 @@ struct msm_drm_private {
 
 	struct drm_fb_helper *fbdev;
 
-	struct msm_rd_state *rd;
+	struct msm_rd_state *rd;       /* debugfs to dump all submits */
+	struct msm_rd_state *hangrd;   /* debugfs to dump hanging submits */
 	struct msm_perf_state *perf;
 
 	/* list of GEM objects: */
 	struct list_head inactive_list;
 
 	struct workqueue_struct *wq;
-
-	/* crtcs pending async atomic updates: */
-	uint32_t pending_crtcs;
-	wait_queue_head_t pending_crtcs_event;
-
-	/* Registered address spaces.. currently this is fixed per # of
-	 * iommu's.  Ie. one for display block and one for gpu block.
-	 * Eventually, to do per-process gpu pagetables, we'll want one
-	 * of these per-process.
-	 */
-	unsigned int num_aspaces;
-	struct msm_gem_address_space *aspace[NUM_DOMAINS];
 
 	unsigned int num_planes;
 	struct drm_plane *planes[MAX_PLANES];
@@ -580,9 +333,6 @@ struct msm_drm_private {
 
 	struct msm_drm_thread disp_thread[MAX_CRTCS];
 	struct msm_drm_thread event_thread[MAX_CRTCS];
-
-	struct task_struct *pp_event_thread;
-	struct kthread_worker pp_event_worker;
 
 	unsigned int num_encoders;
 	struct drm_encoder *encoders[MAX_ENCODERS];
@@ -595,8 +345,6 @@ struct msm_drm_private {
 
 	/* Properties */
 	struct drm_property *plane_property[PLANE_PROP_COUNT];
-	struct drm_property *crtc_property[CRTC_PROP_COUNT];
-	struct drm_property *conn_property[CONNECTOR_PROP_COUNT];
 
 	/* Color processing properties for the crtc */
 	struct drm_property **cp_property;
@@ -609,16 +357,13 @@ struct msm_drm_private {
 		 * and position mm_node->start is in # of pages:
 		 */
 		struct drm_mm mm;
+		spinlock_t lock; /* Protects drm_mm node allocation/removal */
 	} vram;
 
 	struct notifier_block vmap_notifier;
 	struct shrinker shrinker;
 
-	/* task holding struct_mutex.. currently only used in submit path
-	 * to detect and reject faults from copy_from_user() for submit
-	 * ioctl.
-	 */
-	struct task_struct *struct_mutex_task;
+	struct msm_vblank_ctrl vblank_ctrl;
 
 	/* list of clients waiting for events */
 	struct list_head client_event_list;
@@ -628,9 +373,6 @@ struct msm_drm_private {
 
 	/* msm drv debug root node */
 	struct dentry *debug_root;
-
-	/* update the flag when msm driver receives shutdown notification */
-	bool shutdown_in_progress;
 };
 
 /* get struct msm_kms * from drm_device * */
@@ -641,38 +383,25 @@ struct msm_format {
 	uint32_t pixel_format;
 };
 
-/* callback from wq once fence has passed: */
-struct msm_fence_cb {
-	struct work_struct work;
-	uint32_t fence;
-	void (*func)(struct msm_fence_cb *cb);
-};
+int msm_atomic_prepare_fb(struct drm_plane *plane,
+			  struct drm_plane_state *new_state);
+void msm_atomic_commit_tail(struct drm_atomic_state *state);
+struct drm_atomic_state *msm_atomic_state_alloc(struct drm_device *dev);
+void msm_atomic_state_clear(struct drm_atomic_state *state);
+void msm_atomic_state_free(struct drm_atomic_state *state);
 
-void __msm_fence_worker(struct work_struct *work);
-
-#define INIT_FENCE_CB(_cb, _func)  do {                     \
-		INIT_WORK(&(_cb)->work, __msm_fence_worker); \
-		(_cb)->func = _func;                         \
-	} while (0)
-
-int msm_atomic_commit(struct drm_device *dev,
-		struct drm_atomic_state *state, bool nonblock);
-
-void msm_gem_submit_free(struct msm_gem_submit *submit);
 void msm_gem_unmap_vma(struct msm_gem_address_space *aspace,
-		struct msm_gem_vma *vma, struct sg_table *sgt,
-		void *priv);
+		struct msm_gem_vma *vma, struct sg_table *sgt);
 int msm_gem_map_vma(struct msm_gem_address_space *aspace,
-		struct msm_gem_vma *vma, struct sg_table *sgt,
-		void *priv, unsigned int flags);
-void msm_gem_address_space_destroy(struct msm_gem_address_space *aspace);
+		struct msm_gem_vma *vma, struct sg_table *sgt, int npages);
 
-/* For GPU and legacy display */
+void msm_gem_address_space_put(struct msm_gem_address_space *aspace);
+
 struct msm_gem_address_space *
 msm_gem_address_space_create(struct device *dev, struct iommu_domain *domain,
 		const char *name);
 
-/* For SDE  display */
+/* For DPU  display */
 struct msm_gem_address_space *
 msm_gem_smmu_address_space_create(struct drm_device *dev, struct msm_mmu *mmu,
 		const char *name);
@@ -699,6 +428,8 @@ void msm_gem_remove_obj_from_aspace_active_list(
 struct msm_gem_address_space *
 msm_gem_smmu_address_space_get(struct drm_device *dev,
 		unsigned int domain);
+int msm_register_mmu(struct drm_device *dev, struct msm_mmu *mmu);
+void msm_unregister_mmu(struct drm_device *dev, struct msm_mmu *mmu);
 
 /**
  * msm_gem_aspace_domain_attach_detach: function to inform the attach/detach
@@ -725,23 +456,21 @@ int msm_gem_address_space_unregister_cb(
 		void (*cb)(void *, bool),
 		void *cb_data);
 
+void msm_gem_submit_free(struct msm_gem_submit *submit);
 int msm_ioctl_gem_submit(struct drm_device *dev, void *data,
 		struct drm_file *file);
 
 void msm_gem_shrinker_init(struct drm_device *dev);
 void msm_gem_shrinker_cleanup(struct drm_device *dev);
 
-void msm_gem_sync(struct drm_gem_object *obj);
 int msm_gem_mmap_obj(struct drm_gem_object *obj,
 			struct vm_area_struct *vma);
 int msm_gem_mmap(struct file *filp, struct vm_area_struct *vma);
-int msm_gem_fault(struct vm_area_struct *vma, struct vm_fault *vmf);
+int msm_gem_fault(struct vm_fault *vmf);
 uint64_t msm_gem_mmap_offset(struct drm_gem_object *obj);
-int msm_gem_get_iova_locked(struct drm_gem_object *obj,
-		struct msm_gem_address_space *aspace, uint32_t *iova);
 int msm_gem_get_iova(struct drm_gem_object *obj,
-		struct msm_gem_address_space *aspace, uint32_t *iova);
-uint32_t msm_gem_iova(struct drm_gem_object *obj,
+		struct msm_gem_address_space *aspace, uint64_t *iova);
+uint64_t msm_gem_iova(struct drm_gem_object *obj,
 		struct msm_gem_address_space *aspace);
 struct page **msm_gem_get_pages(struct drm_gem_object *obj);
 void msm_gem_put_pages(struct drm_gem_object *obj);
@@ -761,17 +490,14 @@ struct drm_gem_object *msm_gem_prime_import_sg_table(struct drm_device *dev,
 		struct dma_buf_attachment *attach, struct sg_table *sg);
 int msm_gem_prime_pin(struct drm_gem_object *obj);
 void msm_gem_prime_unpin(struct drm_gem_object *obj);
-void *msm_gem_get_vaddr_locked(struct drm_gem_object *obj);
 void *msm_gem_get_vaddr(struct drm_gem_object *obj);
-void msm_gem_put_vaddr_locked(struct drm_gem_object *obj);
+void *msm_gem_get_vaddr_active(struct drm_gem_object *obj);
 void msm_gem_put_vaddr(struct drm_gem_object *obj);
-int msm_gem_madvise(struct drm_gem_object *obj, unsigned madv);
-void msm_gem_purge(struct drm_gem_object *obj);
-void msm_gem_vunmap(struct drm_gem_object *obj);
+int msm_gem_madvise(struct drm_gem_object *obj, unsigned int madv);
 int msm_gem_sync_object(struct drm_gem_object *obj,
 		struct msm_fence_context *fctx, bool exclusive);
 void msm_gem_move_to_active(struct drm_gem_object *obj,
-		struct msm_gpu *gpu, bool exclusive, struct fence *fence);
+		struct msm_gpu *gpu, bool exclusive, struct dma_fence *fence);
 void msm_gem_move_to_inactive(struct drm_gem_object *obj);
 int msm_gem_cpu_prep(struct drm_gem_object *obj, uint32_t op, ktime_t *timeout);
 int msm_gem_cpu_fini(struct drm_gem_object *obj);
@@ -780,6 +506,14 @@ int msm_gem_new_handle(struct drm_device *dev, struct drm_file *file,
 		uint32_t size, uint32_t flags, uint32_t *handle);
 struct drm_gem_object *msm_gem_new(struct drm_device *dev,
 		uint32_t size, uint32_t flags);
+struct drm_gem_object *msm_gem_new_locked(struct drm_device *dev,
+		uint32_t size, uint32_t flags);
+void *msm_gem_kernel_new(struct drm_device *dev, uint32_t size,
+		uint32_t flags, struct msm_gem_address_space *aspace,
+		struct drm_gem_object **bo, uint64_t *iova);
+void *msm_gem_kernel_new_locked(struct drm_device *dev, uint32_t size,
+		uint32_t flags, struct msm_gem_address_space *aspace,
+		struct drm_gem_object **bo, uint64_t *iova);
 struct drm_gem_object *msm_gem_import(struct drm_device *dev,
 		struct dma_buf *dmabuf, struct sg_table *sgt);
 
@@ -794,49 +528,29 @@ uint32_t msm_framebuffer_phys(struct drm_framebuffer *fb, int plane);
 struct drm_gem_object *msm_framebuffer_bo(struct drm_framebuffer *fb, int plane);
 const struct msm_format *msm_framebuffer_format(struct drm_framebuffer *fb);
 struct drm_framebuffer *msm_framebuffer_init(struct drm_device *dev,
-		const struct drm_mode_fb_cmd2 *mode_cmd, struct drm_gem_object **bos);
+		const struct drm_mode_fb_cmd2 *mode_cmd,
+		struct drm_gem_object **bos);
 struct drm_framebuffer *msm_framebuffer_create(struct drm_device *dev,
 		struct drm_file *file, const struct drm_mode_fb_cmd2 *mode_cmd);
+struct drm_framebuffer *msm_alloc_stolen_fb(struct drm_device *dev,
+		int w, int h, int p, uint32_t format);
 
 struct drm_fb_helper *msm_fbdev_init(struct drm_device *dev);
 void msm_fbdev_free(struct drm_device *dev);
 
 struct hdmi;
-#ifdef CONFIG_DRM_MSM_HDMI
 int msm_hdmi_modeset_init(struct hdmi *hdmi, struct drm_device *dev,
 		struct drm_encoder *encoder);
 void __init msm_hdmi_register(void);
 void __exit msm_hdmi_unregister(void);
-#else
-static inline void __init msm_hdmi_register(void)
-{
-}
-static inline void __exit msm_hdmi_unregister(void)
-{
-}
-#endif
 
 struct msm_edp;
-#ifdef CONFIG_DRM_MSM_EDP
 void __init msm_edp_register(void);
 void __exit msm_edp_unregister(void);
 int msm_edp_modeset_init(struct msm_edp *edp, struct drm_device *dev,
 		struct drm_encoder *encoder);
-#else
-static inline void __init msm_edp_register(void)
-{
-}
-static inline void __exit msm_edp_unregister(void)
-{
-}
-#endif
 
 struct msm_dsi;
-enum msm_dsi_encoder_id {
-	MSM_DSI_VIDEO_ENCODER_ID = 0,
-	MSM_DSI_CMD_ENCODER_ID = 1,
-	MSM_DSI_ENCODER_NUM = 2
-};
 
 /* *
  * msm_mode_object_event_notify - notify user-space clients of drm object
@@ -851,7 +565,7 @@ void msm_mode_object_event_notify(struct drm_mode_object *obj,
 void __init msm_dsi_register(void);
 void __exit msm_dsi_unregister(void);
 int msm_dsi_modeset_init(struct msm_dsi *msm_dsi, struct drm_device *dev,
-		struct drm_encoder *encoders[MSM_DSI_ENCODER_NUM]);
+			 struct drm_encoder *encoder);
 #else
 static inline void __init msm_dsi_register(void)
 {
@@ -860,8 +574,8 @@ static inline void __exit msm_dsi_unregister(void)
 {
 }
 static inline int msm_dsi_modeset_init(struct msm_dsi *msm_dsi,
-		struct drm_device *dev,
-		struct drm_encoder *encoders[MSM_DSI_ENCODER_NUM])
+				       struct drm_device *dev,
+				       struct drm_encoder *encoder)
 {
 	return -EINVAL;
 }
@@ -870,21 +584,33 @@ static inline int msm_dsi_modeset_init(struct msm_dsi *msm_dsi,
 void __init msm_mdp_register(void);
 void __exit msm_mdp_unregister(void);
 
+void __init msm_dpu_register(void);
+void __exit msm_dpu_unregister(void);
+
 #ifdef CONFIG_DEBUG_FS
 void msm_gem_describe(struct drm_gem_object *obj, struct seq_file *m);
 void msm_gem_describe_objects(struct list_head *list, struct seq_file *m);
 void msm_framebuffer_describe(struct drm_framebuffer *fb, struct seq_file *m);
 int msm_debugfs_late_init(struct drm_device *dev);
 int msm_rd_debugfs_init(struct drm_minor *minor);
-void msm_rd_debugfs_cleanup(struct drm_minor *minor);
-void msm_rd_dump_submit(struct msm_gem_submit *submit);
+void msm_rd_debugfs_cleanup(struct msm_drm_private *priv);
+void msm_rd_dump_submit(struct msm_rd_state *rd, struct msm_gem_submit *submit,
+		const char *fmt, ...);
 int msm_perf_debugfs_init(struct drm_minor *minor);
-void msm_perf_debugfs_cleanup(struct drm_minor *minor);
+void msm_perf_debugfs_cleanup(struct msm_drm_private *priv);
 #else
 static inline int msm_debugfs_late_init(struct drm_device *dev) { return 0; }
-static inline void msm_rd_dump_submit(struct msm_gem_submit *submit) {}
+static inline void msm_rd_dump_submit(struct msm_rd_state *rd, struct msm_gem_submit *submit,
+		const char *fmt, ...) {}
+static inline void msm_rd_debugfs_cleanup(struct msm_drm_private *priv) {}
+static inline void msm_perf_debugfs_cleanup(struct msm_drm_private *priv) {}
 #endif
 
+struct clk *msm_clk_get(struct platform_device *pdev, const char *name);
+int msm_clk_bulk_get(struct device *dev, struct clk_bulk_data **bulk);
+
+struct clk *msm_clk_bulk_get_clock(struct clk_bulk_data *bulk, int count,
+	const char *name);
 void __iomem *msm_ioremap(struct platform_device *pdev, const char *name,
 		const char *dbgname);
 unsigned long msm_iomap_size(struct platform_device *pdev, const char *name);
@@ -892,8 +618,20 @@ void msm_iounmap(struct platform_device *dev, void __iomem *addr);
 void msm_writel(u32 data, void __iomem *addr);
 u32 msm_readl(const void __iomem *addr);
 
-#define DBG(fmt, ...) DRM_DEBUG(fmt"\n", ##__VA_ARGS__)
-#define VERB(fmt, ...) if (0) DRM_DEBUG(fmt"\n", ##__VA_ARGS__)
+struct msm_gpu_submitqueue;
+int msm_submitqueue_init(struct drm_device *drm, struct msm_file_private *ctx);
+struct msm_gpu_submitqueue *msm_submitqueue_get(struct msm_file_private *ctx,
+		u32 id);
+int msm_submitqueue_create(struct drm_device *drm, struct msm_file_private *ctx,
+		u32 prio, u32 flags, u32 *id);
+int msm_submitqueue_remove(struct msm_file_private *ctx, u32 id);
+void msm_submitqueue_close(struct msm_file_private *ctx);
+
+void msm_submitqueue_destroy(struct kref *kref);
+
+
+#define DBG(fmt, ...) DRM_DEBUG_DRIVER(fmt"\n", ##__VA_ARGS__)
+#define VERB(fmt, ...) if (0) DRM_DEBUG_DRIVER(fmt"\n", ##__VA_ARGS__)
 
 static inline int align_pitch(int width, int bpp)
 {
