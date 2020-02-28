@@ -21,6 +21,8 @@
 #include "adreno_gpu.h"
 #include "msm_gem.h"
 #include "msm_mmu.h"
+#define MSM_PARAM_NR_RINGS   0x07
+#define MSM_PARAM_GMEM_BASE  0x06
 
 int adreno_get_param(struct msm_gpu *gpu, uint32_t param, uint64_t *value)
 {
