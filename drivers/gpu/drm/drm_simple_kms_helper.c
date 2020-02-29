@@ -65,7 +65,7 @@ static void drm_simple_kms_crtc_disable(struct drm_crtc *crtc)
 static const struct drm_crtc_helper_funcs drm_simple_kms_crtc_helper_funcs = {
 	.atomic_check = drm_simple_kms_crtc_check,
 	.disable = drm_simple_kms_crtc_disable,
-	.enable = drm_simple_kms_crtc_enable,
+	.atomic_enable = drm_simple_kms_crtc_enable,
 };
 
 static const struct drm_crtc_funcs drm_simple_kms_crtc_funcs = {
