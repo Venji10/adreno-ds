@@ -140,6 +140,23 @@ struct drm_crtc_helper_funcs {
 					   const struct drm_display_mode *mode);
 
 	/**
+	 * @load_lut:
+	 *
+	 * Load a LUT prepared with the @gamma_set functions from
+	 * &drm_fb_helper_funcs.
+	 *
+	 * This callback is optional and is only used by the fbdev emulation
+	 * helpers.
+	 *
+	 * FIXME:
+	 *
+	 * This callback is functionally redundant with the core gamma table
+	 * support and simply exists because the fbdev hasn't yet been
+	 * refactored to use the core gamma table interfaces.
+	 */
+	void (*load_lut)(struct drm_crtc *crtc);
+
+	/**
 	 * @mode_fixup:
 	 *
 	 * This callback is used to validate a mode. The parameter mode is the
